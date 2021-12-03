@@ -36,11 +36,77 @@ func getCanonicalNotes() [12]string {
 		"G#", "A", "A#", "B"}
 }
 
-func getIntrinsicMatrix() [3][4]float64 {
+func getIntrinsicMatrix() [3][3]float64 {
+	return [3][3]float64{
+		{DistanceToCameraPlane, 0.0, float64(ScreenWidth) / 2.0},
+		{0.0, DistanceToCameraPlane, float64(ScreenHeight) / 2.0},
+		{0.0, 0.0, 1.0},
+	}
+}
+
+func getYawMatrix(alpha float64) [3][3]float64 {
+	return [3][3]float64{
+		{math.Cos(alpha), -math.Sin(alpha), 0.0},
+		{math.Sin(alpha), math.Cos(alpha), 0.0},
+		{0.0, 0.0, 1.0},
+	}
+}
+
+func getPitchMatrix(beta float64) [3][3]float64 {
+	return [3][3]float64{
+		{math.Cos(beta), 0.0, math.Sin(beta)},
+		{0.0, 1.0, 0.0},
+		{-math.Sin(beta), 0.0, math.Cos(beta)},
+	}
+}
+
+func getRollMatrix(gamma float64) [3][3]float64 {
+	return [3][3]float64{
+		{1.0, 0.0, 0.0},
+		{0.0, math.Cos(gamma), -math.Sin(gamma)},
+		{0.0, math.Sin(gamma), math.Cos(gamma)},
+	}
+}
+
+// No generics :(
+func matrixMatrixProduct3x3(A [3][3]float64, B [3][3]float64) [3][3]float64 {
+	var result [3][3]float64
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			for k := 0; k < 3; k++ {
+				result[i][j] += A[i][k] * B[k][j]
+			}
+		}
+	}
+	return result
+}
+
+func matrixVectorProduct3x3(A [3][3]float64, b [3]float64) [3]float64 {
+	var result [3]float64
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			result[i] += A[i][j] * b[j]
+		}
+	}
+	return result
+}
+
+func getCameraRotationMatrix(alpha float64, beta float64, gamma float64) [3][3]float64 {
+	yawMatrix := getYawMatrix(alpha)
+	pitchMatrix := getPitchMatrix(beta)
+	rollMatrix := getRollMatrix(gamma)
+
+	return matrixMatrixProduct3x3(matrixMatrixProduct3x3(yawMatrix, pitchMatrix), rollMatrix)
+}
+
+func getExtrinsicMatrix(alpha float64, beta float64, gamma float64, cameraPosition Vector3d) [3][4]float64 {
+	R := getCameraRotationMatrix(alpha, beta, gamma)
+	t := matrixVectorProduct3x3(R, vector3dToArray(scaleByScalar(cameraPosition, -1.0)))
+
 	return [3][4]float64{
-		{DistanceToCameraPlane, 0.0, float64(ScreenWidth) / 2.0, 0.0},
-		{0.0, DistanceToCameraPlane, float64(ScreenHeight) / 2.0, 0.0},
-		{0.0, 0.0, 1.0, 0.0},
+		{R[0][0], R[0][1], R[0][2], t[0]},
+		{R[1][0], R[1][1], R[1][2], t[1]},
+		{R[2][0], R[2][1], R[2][2], t[2]},
 	}
 }
 
@@ -71,6 +137,10 @@ type Cylinder struct {
 type Camera struct {
 	position Vector3d
 	lookAt   Vector3d
+}
+
+func vector3dToArray(v Vector3d) [3]float64 {
+	return [3]float64{v.x, v.y, v.z}
 }
 
 func plus(v1 Vector3d, v2 Vector3d) Vector3d {
