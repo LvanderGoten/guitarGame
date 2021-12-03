@@ -91,6 +91,18 @@ func matrixVectorProduct3x3(A [3][3]float64, b [3]float64) [3]float64 {
 	return result
 }
 
+func matrixMatrixProduct3x4(A [3][3]float64, B [3][4]float64) [3][4]float64 {
+	var result [3][4]float64
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 4; j++ {
+			for k := 0; k < 3; k++ {
+				result[i][j] += A[i][k] * B[k][j]
+			}
+		}
+	}
+	return result
+}
+
 func getCameraRotationMatrix(alpha float64, beta float64, gamma float64) [3][3]float64 {
 	yawMatrix := getYawMatrix(alpha)
 	pitchMatrix := getPitchMatrix(beta)
@@ -108,6 +120,14 @@ func getExtrinsicMatrix(alpha float64, beta float64, gamma float64, cameraPositi
 		{R[1][0], R[1][1], R[1][2], t[1]},
 		{R[2][0], R[2][1], R[2][2], t[2]},
 	}
+}
+
+func getCameraMatrix(alpha float64, beta float64, gamma float64, cameraPosition Vector3d) [3][4]float64 {
+	intrinsicMatrix := getIntrinsicMatrix()
+	extrinsicMatrix := getExtrinsicMatrix(alpha, beta, gamma, cameraPosition)
+
+	return matrixMatrixProduct3x4(intrinsicMatrix, extrinsicMatrix)
+
 }
 
 type Vertex struct {
