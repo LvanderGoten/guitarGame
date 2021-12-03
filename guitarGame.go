@@ -36,6 +36,14 @@ func getCanonicalNotes() [12]string {
 		"G#", "A", "A#", "B"}
 }
 
+func getIntrinsicMatrix() [3][4]float64 {
+	return [3][4]float64{
+		{0, 1, 2, 3} ,
+		{4, 5, 6, 7} ,
+		{8, 9, 10, 11}
+	}
+}
+
 type Vertex struct {
 	id int
 	coord Vector3d
@@ -94,11 +102,12 @@ func euclideanNorm(v Vector3d) float64 {
 }
 
 func matrixVectorProduct(A [][]float64, b[]float64) []float64 {
-	m := len(A)
-	n := len(A[0])
-	if n != len(b) {
+	if len(A[0]) != len(b) {
 		panic("Matrix-vector product is ill-defined!")
 	}
+	m := len(A)
+	n := len(A[0])
+
 	result := make([]float64, m)
 
 	for i := 0; i < m; i++ {
@@ -108,6 +117,26 @@ func matrixVectorProduct(A [][]float64, b[]float64) []float64 {
 	}
 
 	return result
+}
+
+func matrixMatrixProduct(A [][]float64, B [][]float64) [][]float64 {
+	if len(A[0]) != len(B) {
+		panic("Matrix-matrix product is ill-defined!")
+	}
+	m := len(A)
+	n := len(B)
+	p := len(B[0])
+
+	result := make([][]float64, m)
+
+	for i := 0; i < m; i++ {
+		result[i] = make([]float64, p)
+		for j := 0; j < p ; j++ {
+			for k := 0; k < n; k++ {
+				result[i][j] += A[i][k] * B[k][j]
+			}
+		}
+	}
 }
 
 func computeNormal(v1 *Vertex, v2 *Vertex, v3 *Vertex) Vector3d {
