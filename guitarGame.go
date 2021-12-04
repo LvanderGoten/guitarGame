@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/fogleman/gg"
+	"image"
+	"image/color"
+	"image/png"
 	"math"
 	"os"
 )
@@ -34,6 +37,10 @@ func getCanonicalNotes() [12]string {
 		"C", "C#", "D", "D#",
 		"E", "F", "F#", "G",
 		"G#", "A", "A#", "B"}
+}
+
+func getLightingDirection() [3]float64 {
+	return [3]float64{1.0 / math.Sqrt(2.0), 1.0 / math.Sqrt(2.0), 0.0}
 }
 
 func getIntrinsicMatrix() [3][3]float64 {
@@ -259,6 +266,16 @@ func printMatrix3x4(A [3][4]float64) {
 	}
 }
 
+func transposeMatrix3x3(A [3][3]float64) [3][3]float64 {
+	var result [3][3]float64
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			result[i][j] = A[j][i]
+		}
+	}
+	return result
+}
+
 func transposeMatrix3x4(A [3][4]float64) [4][3]float64 {
 	var result [4][3]float64
 	for i := 0; i < 4; i++ {
@@ -434,8 +451,89 @@ func worldCoordinatesToImageCoordinates(vertexWorldCoords [][4]float64, cameraMa
 	return vertexImageCoords
 }
 
-func raytraceLevelToImage(camera *Camera, cylinder *Cylinder, fileName string) {
-	// var image [ScreenWidth][ScreenHeight]float64
+func normalsToLighting(normals [][3]float64) []float64 {
+	numNormals := len(normals)
+	intensity := make([]float64, numNormals)
+	lightingDirection := getLightingDirection()
+	for i, normal := range normals {
+		intensity[i] = math.Abs(normal[0]*lightingDirection[0] + normal[1]*lightingDirection[1] + normal[2]*lightingDirection[2])
+	}
+	return intensity
+}
+
+func zBuffer(vertexImageCoords [][3]float64, vertexLightingIntensity []float64) [ScreenWidth][ScreenHeight]float64 {
+	var image [ScreenWidth][ScreenHeight]float64
+
+	numVertices := len(vertexImageCoords)
+
+	var depth [ScreenWidth][ScreenHeight]float64
+	for i := 0; i < ScreenWidth; i++ {
+		for j := 0; j < ScreenHeight; j++ {
+			depth[i][j] = math.Inf(1)
+		}
+	}
+
+	for i := 0; i < numVertices; i++ {
+		x := int(math.Round(vertexImageCoords[i][0]))
+		y := int(math.Round(vertexImageCoords[i][1]))
+
+		if (x < 0 || x >= ScreenWidth) || (y < 0 || y >= ScreenHeight) {
+			continue
+		}
+
+		z := vertexImageCoords[i][2]
+
+		if z < depth[x][y] {
+			intensity := vertexLightingIntensity[i]
+			image[x][y] = intensity
+			fmt.Printf("%d %d %f %f\n", x, y, z, intensity)
+			depth[x][y] = z
+		}
+
+	}
+	return image
+
+}
+
+func imageTo8bit(img [ScreenWidth][ScreenHeight]float64) [ScreenWidth][ScreenHeight]uint8 {
+	var result [ScreenWidth][ScreenHeight]uint8
+	for i := 0; i < ScreenWidth; i++ {
+		for j := 0; j < ScreenHeight; j++ {
+			result[i][j] = uint8(255.0 * img[i][j])
+		}
+	}
+	return result
+}
+
+func save8bitImage(img [ScreenWidth][ScreenHeight]uint8) {
+	rgbImg := image.NewRGBA(image.Rect(0, 0, ScreenWidth, ScreenHeight))
+	for i := 0; i < ScreenWidth; i++ {
+		for j := 0; j < ScreenHeight; j++ {
+			rgbImg.Set(i, j, color.RGBA{
+				R: img[i][j],
+				G: img[i][j],
+				B: img[i][j],
+				A: 255,
+			})
+		}
+	}
+	out, _ := os.Create("test.png")
+	png.Encode(out, rgbImg)
+	out.Close()
+}
+
+func homogeneousToInhomogeneous(vertexCoords [][4]float64) [][3]float64 {
+	numCoords := len(vertexCoords)
+	result := make([][3]float64, numCoords)
+	for i, coord := range vertexCoords {
+		result[i][0] = coord[0]
+		result[i][1] = coord[1]
+		result[i][2] = coord[2]
+	}
+	return result
+}
+
+func rasterizeLevelToImage(camera *Camera, cylinder *Cylinder, fileName string) {
 	cameraMatrix := getCameraMatrix(camera.alpha, camera.beta, camera.gamma, camera.position)
 
 	vertexWorldCoords := gatherCoordinatesFromTriangleMesh(cylinder)
@@ -444,10 +542,15 @@ func raytraceLevelToImage(camera *Camera, cylinder *Cylinder, fileName string) {
 
 	vertexWorldNormals := gatherNormalsFromTriangleMesh(cylinder)
 	vertexWorldNormalsFlat := flattenVector3d(vertexWorldNormals)
-	vertexImageNormals := worldCoordinatesToImageCoordinates(vertexWorldNormalsFlat, cameraMatrix)
+	vertexNormals := homogeneousToInhomogeneous(vertexWorldNormalsFlat)
 
-	fmt.Println(len(vertexImageCoords))
-	fmt.Println(len(vertexImageNormals))
+	vertexLightingIntensity := normalsToLighting(vertexNormals)
+
+	image := zBuffer(vertexImageCoords, vertexLightingIntensity)
+	image8bit := imageTo8bit(image)
+	save8bitImage(image8bit)
+
+	fmt.Println(len(image8bit))
 
 	dc := gg.NewContext(ScreenWidth, ScreenWidth)
 	dc.SetRGB(1, 1, 1)
@@ -482,9 +585,8 @@ func writeToObjFile(cylinder *Cylinder, fileName string) {
 }
 
 func main() {
-	fmt.Println("Hello World")
 	cylinder := getCylinder(0.0, 0.0)
 	writeToObjFile(cylinder, "test.obj")
-	camera := Camera{Vector3d{0, 0, 0}, 0.0, 0.0, 0.0}
-	raytraceLevelToImage(&camera, cylinder, "test.png")
+	camera := Camera{Vector3d{0, 0, 0}, 0.5, 0.25, 0.1}
+	rasterizeLevelToImage(&camera, cylinder, "test.png")
 }
