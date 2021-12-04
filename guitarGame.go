@@ -81,16 +81,6 @@ func matrixMatrixProduct3x3(A [3][3]float64, B [3][3]float64) [3][3]float64 {
 	return result
 }
 
-func matrixVectorProduct3x3(A [3][3]float64, b [3]float64) [3]float64 {
-	var result [3]float64
-	for i := 0; i < 3; i++ {
-		for j := 0; j < 3; j++ {
-			result[i] += A[i][j] * b[j]
-		}
-	}
-	return result
-}
-
 func matrixMatrixProduct3x4(A [3][3]float64, B [3][4]float64) [3][4]float64 {
 	var result [3][4]float64
 	for i := 0; i < 3; i++ {
@@ -98,6 +88,16 @@ func matrixMatrixProduct3x4(A [3][3]float64, B [3][4]float64) [3][4]float64 {
 			for k := 0; k < 3; k++ {
 				result[i][j] += A[i][k] * B[k][j]
 			}
+		}
+	}
+	return result
+}
+
+func matrixVectorProduct3x3(A [3][3]float64, b [3]float64) [3]float64 {
+	var result [3]float64
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			result[i] += A[i][j] * b[j]
 		}
 	}
 	return result
@@ -131,8 +131,9 @@ func getCameraMatrix(alpha float64, beta float64, gamma float64, cameraPosition 
 }
 
 type Vertex struct {
-	id    int
-	coord Vector3d
+	id     int
+	coord  Vector3d
+	normal Vector3d
 }
 
 type Face struct {
@@ -156,7 +157,9 @@ type Cylinder struct {
 
 type Camera struct {
 	position Vector3d
-	lookAt   Vector3d
+	alpha    float64
+	beta     float64
+	gamma    float64
 }
 
 func vector3dToArray(v Vector3d) [3]float64 {
@@ -227,6 +230,43 @@ func matrixMatrixProduct(A [][]float64, B [][]float64) [][]float64 {
 			}
 		}
 	}
+
+	return result
+}
+
+func matrixMatrixProduct4x3(A [][4]float64, B [4][3]float64) [][3]float64 {
+	m := len(A)
+	result := make([][3]float64, m)
+
+	for i := 0; i < m; i++ {
+		for j := 0; j < 3; j++ {
+			for k := 0; k < 4; k++ {
+				result[i][j] += A[i][k] * B[k][j]
+			}
+		}
+	}
+
+	return result
+}
+
+func printMatrix3x4(A [3][4]float64) {
+	for _, row := range A {
+		fmt.Print("[")
+		for _, elem := range row {
+			fmt.Printf("%.3f,", elem)
+		}
+		fmt.Println("]")
+	}
+}
+
+func transposeMatrix3x4(A [3][4]float64) [4][3]float64 {
+	var result [4][3]float64
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 3; j++ {
+			result[i][j] = A[j][i]
+		}
+	}
+	return result
 }
 
 func computeNormal(v1 *Vertex, v2 *Vertex, v3 *Vertex) Vector3d {
@@ -266,7 +306,11 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 			y := y0 + CylinderRadius*math.Sin(phi)
 			z := z
 
-			cylinder.vertices[i*CylinderNumRotationAngles+j] = Vertex{i*CylinderNumRotationAngles + j, Vector3d{x, y, z}}
+			nx := math.Cos(phi)
+			ny := math.Sin(phi)
+			nz := 0.0
+
+			cylinder.vertices[i*CylinderNumRotationAngles+j] = Vertex{i*CylinderNumRotationAngles + j, Vector3d{x, y, z}, Vector3d{nx, ny, nz}}
 		}
 	}
 
@@ -330,8 +374,80 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 	return cylinder
 }
 
+func gatherCoordinatesFromTriangleMesh(cylinder *Cylinder) [][3][4]float64 {
+	numFaces := len(cylinder.faces)
+	result := make([][3][4]float64, numFaces)
+	var faceMatrix [3][4]float64
+
+	for i, face := range cylinder.faces {
+		a1 := vector3dToArray(face.v1.coord)
+		a2 := vector3dToArray(face.v2.coord)
+		a3 := vector3dToArray(face.v3.coord)
+
+		copy(faceMatrix[0][:], append(a1[:], 1.0))
+		copy(faceMatrix[1][:], append(a2[:], 1.0))
+		copy(faceMatrix[2][:], append(a3[:], 1.0))
+
+		result[i] = faceMatrix
+	}
+
+	return result
+}
+
+func gatherNormalsFromTriangleMesh(cylinder *Cylinder) [][3][4]float64 {
+	numFaces := len(cylinder.faces)
+	result := make([][3][4]float64, numFaces)
+	var faceMatrix [3][4]float64
+
+	for i, face := range cylinder.faces {
+		a1 := vector3dToArray(face.v1.normal)
+		a2 := vector3dToArray(face.v2.normal)
+		a3 := vector3dToArray(face.v3.normal)
+
+		copy(faceMatrix[0][:], append(a1[:], 1.0))
+		copy(faceMatrix[1][:], append(a2[:], 1.0))
+		copy(faceMatrix[2][:], append(a3[:], 1.0))
+
+		result[i] = faceMatrix
+	}
+
+	return result
+}
+
+func flattenVector3d(arr [][3][4]float64) [][4]float64 {
+	numFaces := len(arr)
+	result := make([][4]float64, 3*numFaces)
+
+	for i := 0; i < numFaces; i += 3 {
+		result[i] = arr[i][0]
+		result[i+1] = arr[i][1]
+		result[i+2] = arr[i][2]
+	}
+
+	return result
+}
+
+func worldCoordinatesToImageCoordinates(vertexWorldCoords [][4]float64, cameraMatrix [3][4]float64) [][3]float64 {
+	cameraMatrixTransposed := transposeMatrix3x4(cameraMatrix)
+	vertexImageCoords := matrixMatrixProduct4x3(vertexWorldCoords, cameraMatrixTransposed)
+
+	return vertexImageCoords
+}
+
 func raytraceLevelToImage(camera *Camera, cylinder *Cylinder, fileName string) {
 	// var image [ScreenWidth][ScreenHeight]float64
+	cameraMatrix := getCameraMatrix(camera.alpha, camera.beta, camera.gamma, camera.position)
+
+	vertexWorldCoords := gatherCoordinatesFromTriangleMesh(cylinder)
+	vertexWorldCoordsFlat := flattenVector3d(vertexWorldCoords)
+	vertexImageCoords := worldCoordinatesToImageCoordinates(vertexWorldCoordsFlat, cameraMatrix)
+
+	vertexWorldNormals := gatherNormalsFromTriangleMesh(cylinder)
+	vertexWorldNormalsFlat := flattenVector3d(vertexWorldNormals)
+	vertexImageNormals := worldCoordinatesToImageCoordinates(vertexWorldNormalsFlat, cameraMatrix)
+
+	fmt.Println(len(vertexImageCoords))
+	fmt.Println(len(vertexImageNormals))
 
 	dc := gg.NewContext(ScreenWidth, ScreenWidth)
 	dc.SetRGB(1, 1, 1)
@@ -369,8 +485,6 @@ func main() {
 	fmt.Println("Hello World")
 	cylinder := getCylinder(0.0, 0.0)
 	writeToObjFile(cylinder, "test.obj")
-	cameraPosition := Vector3d{0, 0, 0}
-	lookAt := computeMeanCoordinate(cylinder)
-	camera := Camera{cameraPosition, lookAt}
+	camera := Camera{Vector3d{0, 0, 0}, 0.0, 0.0, 0.0}
 	raytraceLevelToImage(&camera, cylinder, "test.png")
 }
