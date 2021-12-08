@@ -1,11 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/fogleman/gg"
 	"image"
 	"image/color"
 	"image/png"
+	"io/ioutil"
 	"math"
 	"os"
 )
@@ -17,11 +18,11 @@ const (
 	MaxOctave                  int     = 6
 	CylinderRadius             float64 = 1.0
 	CylinderHeight             float64 = 5.0
-	CylinderNumRotationAngles  int     = 32
-	CylinderNumHeightDivisions int     = 100
-	ScreenWidth                int     = 512
-	ScreenHeight               int     = 512
-	DistanceToCameraPlane      float64 = 20.0
+	CylinderNumRotationAngles  int     = 500
+	CylinderNumHeightDivisions int     = 250
+	ScreenWidth                int     = 1024
+	ScreenHeight               int     = 1024
+	DistanceToCameraPlane      float64 = 1.0
 )
 
 func getOpenStringNotes() [6]string {
@@ -49,6 +50,16 @@ func getIntrinsicMatrix() [3][3]float64 {
 		{0.0, DistanceToCameraPlane, float64(ScreenHeight) / 2.0},
 		{0.0, 0.0, 1.0},
 	}
+	// return [3][3]float64{
+	// 	{DistanceToCameraPlane, 0.0, float64(ScreenWidth)},
+	// 	{0.0, DistanceToCameraPlane, float64(ScreenHeight)},
+	// 	{0.0, 0.0, 1.0},
+	// }
+	// return [3][3]float64{
+	// 	{DistanceToCameraPlane, 0.0, 0.0},
+	// 	{0.0, DistanceToCameraPlane, 0.0},
+	// 	{0.0, 0.0, 1.0},
+	// }
 }
 
 func getYawMatrix(alpha float64) [3][3]float64 {
@@ -118,7 +129,7 @@ func getCameraRotationMatrix(alpha float64, beta float64, gamma float64) [3][3]f
 	return matrixMatrixProduct3x3(matrixMatrixProduct3x3(yawMatrix, pitchMatrix), rollMatrix)
 }
 
-func getExtrinsicMatrix(alpha float64, beta float64, gamma float64, cameraPosition Vector3d) [3][4]float64 {
+func getExtrinsicMatrix(alpha float64, beta float64, gamma float64, cameraPosition [3]float64) [3][4]float64 {
 	R := getCameraRotationMatrix(alpha, beta, gamma)
 	t := matrixVectorProduct3x3(R, vector3dToArray(scaleByScalar(cameraPosition, -1.0)))
 
@@ -129,7 +140,7 @@ func getExtrinsicMatrix(alpha float64, beta float64, gamma float64, cameraPositi
 	}
 }
 
-func getCameraMatrix(alpha float64, beta float64, gamma float64, cameraPosition Vector3d) [3][4]float64 {
+func getCameraMatrix(alpha float64, beta float64, gamma float64, cameraPosition [3]float64) [3][4]float64 {
 	intrinsicMatrix := getIntrinsicMatrix()
 	extrinsicMatrix := getExtrinsicMatrix(alpha, beta, gamma, cameraPosition)
 
@@ -139,8 +150,8 @@ func getCameraMatrix(alpha float64, beta float64, gamma float64, cameraPosition 
 
 type Vertex struct {
 	id     int
-	coord  Vector3d
-	normal Vector3d
+	coord  [3]float64
+	normal [3]float64
 }
 
 type Face struct {
@@ -148,13 +159,7 @@ type Face struct {
 	v2 *Vertex
 	v3 *Vertex
 
-	n Vector3d
-}
-
-type Vector3d struct {
-	x float64
-	y float64
-	z float64
+	n [3]float64
 }
 
 type Cylinder struct {
@@ -163,42 +168,54 @@ type Cylinder struct {
 }
 
 type Camera struct {
-	position Vector3d
-	alpha    float64
-	beta     float64
-	gamma    float64
+	Position [3]float64
+	Alpha    float64
+	Beta     float64
+	Gamma    float64
+	Matrix   [3][4]float64
 }
 
-func vector3dToArray(v Vector3d) [3]float64 {
-	return [3]float64{v.x, v.y, v.z}
+func NewCamera(position [3]float64, alpha float64, beta float64, gamma float64) *Camera {
+	camera := new(Camera)
+	camera.Position = position
+	camera.Alpha = alpha
+	camera.Beta = beta
+	camera.Gamma = gamma
+	camera.Matrix = getCameraMatrix(alpha, beta, gamma, position)
+
+	return camera
 }
 
-func plus(v1 Vector3d, v2 Vector3d) Vector3d {
-	return Vector3d{v1.x + v2.x, v1.y + v2.y, v1.z + v2.z}
+func vector3dToArray(v [3]float64) [3]float64 {
+	return [3]float64{v[0], v[1], v[2]}
 }
 
-func minus(v1 Vector3d, v2 Vector3d) Vector3d {
-	return Vector3d{v1.x - v2.x, v1.y - v2.y, v1.z - v2.z}
+func plus(a [3]float64, b [3]float64) [3]float64 {
+	return [3]float64{a[0] + b[0], a[1] + b[1], a[2] + b[2]}
 }
 
-func dotProduct(v1 Vector3d, v2 Vector3d) float64 {
-	return v1.x*v2.x + v1.y*v2.y + v1.z*v2.z
+func minus(a [3]float64, b [3]float64) [3]float64 {
+	return [3]float64{a[0] - b[0], a[1] - b[1], a[2] - b[2]}
 }
 
-func scaleByScalar(v Vector3d, s float64) Vector3d {
-	return Vector3d{v.x * s, v.y * s, v.z * s}
+func dotProduct(a [3]float64, b [3]float64) float64 {
+	return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
 }
 
-func crossProduct(v1 Vector3d, v2 Vector3d) Vector3d {
-	return Vector3d{
-		v1.y*v2.z - v1.z*v2.y,
-		v1.z*v2.x - v1.x*v2.z,
-		v1.x*v2.y - v1.y*v2.x,
+func scaleByScalar(v [3]float64, s float64) [3]float64 {
+	return [3]float64{v[0] * s, v[1] * s, v[2] * s}
+}
+
+func crossProduct(a [3]float64, b [3]float64) [3]float64 {
+	return [3]float64{
+		a[1]*b[2] - a[2]*b[1],
+		a[2]*b[0] - a[0]*b[2],
+		a[0]*b[1] - a[1]*b[0],
 	}
 }
 
-func euclideanNorm(v Vector3d) float64 {
-	return math.Sqrt(v.x*v.x + v.y*v.y + v.z*v.z)
+func euclideanNorm(v [3]float64) float64 {
+	return math.Sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
 }
 
 func matrixVectorProduct(A [][]float64, b []float64) []float64 {
@@ -286,7 +303,7 @@ func transposeMatrix3x4(A [3][4]float64) [4][3]float64 {
 	return result
 }
 
-func computeNormal(v1 *Vertex, v2 *Vertex, v3 *Vertex) Vector3d {
+func computeNormal(v1 *Vertex, v2 *Vertex, v3 *Vertex) [3]float64 {
 	p1 := minus(v2.coord, v1.coord)
 	p2 := minus(v3.coord, v1.coord)
 	d := crossProduct(p1, p2)
@@ -294,13 +311,18 @@ func computeNormal(v1 *Vertex, v2 *Vertex, v3 *Vertex) Vector3d {
 	return scaleByScalar(d, 1.0/dNorm)
 }
 
-func computeMeanCoordinate(cylinder *Cylinder) Vector3d {
-	meanCoord := Vector3d{0.0, 0.0, 0.0}
+func computeMeanCoordinate(cylinder *Cylinder) [3]float64 {
+	meanCoord := [3]float64{0.0, 0.0, 0.0}
 	for i, vertex := range cylinder.vertices {
 		i := float64(i)
 		meanCoord = plus(scaleByScalar(meanCoord, i/(i+1)), scaleByScalar(vertex.coord, 1/(i+1)))
 	}
 	return meanCoord
+}
+
+func getCameraPrincipalPlane(camera *Camera) [4]float64 {
+	cameraMatrix := getCameraMatrix(camera.Alpha, camera.Beta, camera.Gamma, camera.Position)
+	return cameraMatrix[2]
 }
 
 func getCylinder(x0 float64, y0 float64) *Cylinder {
@@ -327,7 +349,7 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 			ny := math.Sin(phi)
 			nz := 0.0
 
-			cylinder.vertices[i*CylinderNumRotationAngles+j] = Vertex{i*CylinderNumRotationAngles + j, Vector3d{x, y, z}, Vector3d{nx, ny, nz}}
+			cylinder.vertices[i*CylinderNumRotationAngles+j] = Vertex{i*CylinderNumRotationAngles + j, [3]float64{x, y, z}, [3]float64{nx, ny, nz}}
 		}
 	}
 
@@ -356,7 +378,7 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 
 	// Faces bottom (triangulation)
 	vcbi := (CylinderNumHeightDivisions-1)*CylinderNumRotationAngles + CylinderNumRotationAngles
-	vcb := Vertex{id: vcbi, coord: Vector3d{x0, y0, 0}}
+	vcb := Vertex{id: vcbi, coord: [3]float64{x0, y0, 0}}
 	cylinder.vertices[vcbi] = vcb
 	for j := 0; j < CylinderNumRotationAngles; j++ {
 		v1i := j
@@ -373,7 +395,7 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 
 	// Faces top (triangulation)
 	vcti := (CylinderNumHeightDivisions-1)*CylinderNumRotationAngles + CylinderNumRotationAngles + 1
-	vct := Vertex{id: vcti, coord: Vector3d{x0, y0, CylinderHeight}}
+	vct := Vertex{id: vcti, coord: [3]float64{x0, y0, CylinderHeight}}
 	cylinder.vertices[vcti] = vct
 	for j := 0; j < CylinderNumRotationAngles; j++ {
 		v1i := (CylinderNumHeightDivisions-1)*CylinderNumRotationAngles + j
@@ -456,13 +478,19 @@ func normalsToLighting(normals [][3]float64) []float64 {
 	intensity := make([]float64, numNormals)
 	lightingDirection := getLightingDirection()
 	for i, normal := range normals {
-		intensity[i] = math.Abs(normal[0]*lightingDirection[0] + normal[1]*lightingDirection[1] + normal[2]*lightingDirection[2])
+		// intensity[i] = 1.0 - math.Abs(normal[0]*lightingDirection[0] + normal[1]*lightingDirection[1] + normal[2]*lightingDirection[2])
+		intensity[i] = (1.0 + normal[0]*lightingDirection[0] + normal[1]*lightingDirection[1] + normal[2]*lightingDirection[2]) / 2.0
 	}
 	return intensity
 }
 
 func zBuffer(vertexImageCoords [][3]float64, vertexLightingIntensity []float64) [ScreenWidth][ScreenHeight]float64 {
 	var image [ScreenWidth][ScreenHeight]float64
+	for i := 0; i < ScreenWidth; i++ {
+		for j := 0; j < ScreenHeight; j++ {
+			image[i][j] = 0.0
+		}
+	}
 
 	numVertices := len(vertexImageCoords)
 
@@ -505,7 +533,7 @@ func imageTo8bit(img [ScreenWidth][ScreenHeight]float64) [ScreenWidth][ScreenHei
 	return result
 }
 
-func save8bitImage(img [ScreenWidth][ScreenHeight]uint8) {
+func save8bitImage(img [ScreenWidth][ScreenHeight]uint8, fileName string) {
 	rgbImg := image.NewRGBA(image.Rect(0, 0, ScreenWidth, ScreenHeight))
 	for i := 0; i < ScreenWidth; i++ {
 		for j := 0; j < ScreenHeight; j++ {
@@ -517,7 +545,7 @@ func save8bitImage(img [ScreenWidth][ScreenHeight]uint8) {
 			})
 		}
 	}
-	out, _ := os.Create("test.png")
+	out, _ := os.Create(fileName)
 	png.Encode(out, rgbImg)
 	out.Close()
 }
@@ -534,7 +562,7 @@ func homogeneousToInhomogeneous(vertexCoords [][4]float64) [][3]float64 {
 }
 
 func rasterizeLevelToImage(camera *Camera, cylinder *Cylinder, fileName string) {
-	cameraMatrix := getCameraMatrix(camera.alpha, camera.beta, camera.gamma, camera.position)
+	cameraMatrix := getCameraMatrix(camera.Alpha, camera.Beta, camera.Gamma, camera.Position)
 
 	vertexWorldCoords := gatherCoordinatesFromTriangleMesh(cylinder)
 	vertexWorldCoordsFlat := flattenVector3d(vertexWorldCoords)
@@ -548,28 +576,20 @@ func rasterizeLevelToImage(camera *Camera, cylinder *Cylinder, fileName string) 
 
 	image := zBuffer(vertexImageCoords, vertexLightingIntensity)
 	image8bit := imageTo8bit(image)
-	save8bitImage(image8bit)
+	save8bitImage(image8bit, fileName)
 
 	fmt.Println(len(image8bit))
-
-	dc := gg.NewContext(ScreenWidth, ScreenWidth)
-	dc.SetRGB(1, 1, 1)
-	dc.Clear()
-	dc.SetRGB(0, 0, 0)
-	dc.DrawPoint(100, 100, 1)
-	dc.Fill()
-	dc.SavePNG(fileName)
 }
 
-func writeToObjFile(cylinder *Cylinder, fileName string) {
-	f, err := os.Create(fileName)
+func writeToObjFile(cylinder *Cylinder, camera *Camera, cylinderFileName string, cameraFileName string) {
+	f, err := os.Create(cylinderFileName)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	for _, vertex := range cylinder.vertices {
-		_, err := f.WriteString(fmt.Sprintf("v %.3f %.3f %.3f\n", vertex.coord.x, vertex.coord.y, vertex.coord.z))
+		_, err := f.WriteString(fmt.Sprintf("v %.3f %.3f %.3f\n", vertex.coord[0], vertex.coord[1], vertex.coord[2]))
 		if err != nil {
 			return
 		}
@@ -582,11 +602,13 @@ func writeToObjFile(cylinder *Cylinder, fileName string) {
 		}
 	}
 
+	dat, err := json.Marshal(*camera)
+	err = ioutil.WriteFile(cameraFileName, dat, 0644)
 }
 
 func main() {
-	cylinder := getCylinder(0.0, 0.0)
-	writeToObjFile(cylinder, "test.obj")
-	camera := Camera{Vector3d{0, 0, 0}, 0.5, 0.25, 0.1}
-	rasterizeLevelToImage(&camera, cylinder, "test.png")
+	cylinder := getCylinder(50.0, 50.0)
+	camera := NewCamera([3]float64{0, 0, 0}, 0.0, 0.0, 0.0)
+	writeToObjFile(cylinder, camera, "cylinder.obj", "camera.json")
+	rasterizeLevelToImage(camera, cylinder, "cylinder.png")
 }
