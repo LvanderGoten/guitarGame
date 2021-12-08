@@ -18,8 +18,8 @@ const (
 	MaxOctave                  int     = 6
 	CylinderRadius             float64 = 1.0
 	CylinderHeight             float64 = 5.0
-	CylinderNumRotationAngles  int     = 500
-	CylinderNumHeightDivisions int     = 250
+	CylinderNumRotationAngles  int     = 50
+	CylinderNumHeightDivisions int     = 25
 	ScreenWidth                int     = 1024
 	ScreenHeight               int     = 1024
 	DistanceToCameraPlane      float64 = 1.0
@@ -45,21 +45,21 @@ func getLightingDirection() [3]float64 {
 }
 
 func getIntrinsicMatrix() [3][3]float64 {
-	return [3][3]float64{
-		{DistanceToCameraPlane, 0.0, float64(ScreenWidth) / 2.0},
-		{0.0, DistanceToCameraPlane, float64(ScreenHeight) / 2.0},
-		{0.0, 0.0, 1.0},
-	}
+	//return [3][3]float64{
+	//	{DistanceToCameraPlane, 0.0, float64(ScreenWidth) / 2.0},
+	//	{0.0, DistanceToCameraPlane, float64(ScreenHeight) / 2.0},
+	//	{0.0, 0.0, 1.0},
+	//}
 	// return [3][3]float64{
 	// 	{DistanceToCameraPlane, 0.0, float64(ScreenWidth)},
 	// 	{0.0, DistanceToCameraPlane, float64(ScreenHeight)},
 	// 	{0.0, 0.0, 1.0},
 	// }
-	// return [3][3]float64{
-	// 	{DistanceToCameraPlane, 0.0, 0.0},
-	// 	{0.0, DistanceToCameraPlane, 0.0},
-	// 	{0.0, 0.0, 1.0},
-	// }
+	return [3][3]float64{
+		{DistanceToCameraPlane, 0.0, 0.0},
+		{0.0, DistanceToCameraPlane, 0.0},
+		{0.0, 0.0, 1.0},
+	}
 }
 
 func getYawMatrix(alpha float64) [3][3]float64 {
@@ -607,8 +607,10 @@ func writeToObjFile(cylinder *Cylinder, camera *Camera, cylinderFileName string,
 }
 
 func main() {
-	cylinder := getCylinder(50.0, 50.0)
-	camera := NewCamera([3]float64{0, 0, 0}, 0.0, 0.0, 0.0)
+	cylinder := getCylinder(10.0, 10.0)
+	PI_2 := math.Pi / 2.0
+	PI_4 := math.Pi / 4.0
+	camera := NewCamera([3]float64{0, 0, 0}, 0.0, -PI_4, PI_2)
 	writeToObjFile(cylinder, camera, "cylinder.obj", "camera.json")
 	rasterizeLevelToImage(camera, cylinder, "cylinder.png")
 }
