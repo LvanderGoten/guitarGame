@@ -20,9 +20,11 @@ const (
 	CylinderHeight             float64 = 5.0
 	CylinderNumRotationAngles  int     = 50
 	CylinderNumHeightDivisions int     = 25
-	ScreenWidth                int     = 1024
-	ScreenHeight               int     = 1024
+	ScreenWidth                int     = 128
+	ScreenHeight               int     = 128
 	DistanceToCameraPlane      float64 = 1.0
+	Pi2                        float64 = math.Pi / 2.0
+	Pi4                        float64 = math.Pi / 4.0
 )
 
 func getOpenStringNotes() [6]string {
@@ -45,16 +47,16 @@ func getLightingDirection() [3]float64 {
 }
 
 func getIntrinsicMatrix() [3][3]float64 {
-	//return [3][3]float64{
-	//	{DistanceToCameraPlane, 0.0, float64(ScreenWidth) / 2.0},
-	//	{0.0, DistanceToCameraPlane, float64(ScreenHeight) / 2.0},
-	//	{0.0, 0.0, 1.0},
-	//}
 	// return [3][3]float64{
-	// 	{DistanceToCameraPlane, 0.0, float64(ScreenWidth)},
-	// 	{0.0, DistanceToCameraPlane, float64(ScreenHeight)},
+	// 	{DistanceToCameraPlane, 0.0, float64(ScreenWidth) / 2.0},
+	// 	{0.0, DistanceToCameraPlane, float64(ScreenHeight) / 2.0},
 	// 	{0.0, 0.0, 1.0},
 	// }
+	//return [3][3]float64{
+	//	{DistanceToCameraPlane, 0.0, float64(ScreenWidth)},
+	//	{0.0, DistanceToCameraPlane, float64(ScreenHeight)},
+	//	{0.0, 0.0, 1.0},
+	//}
 	return [3][3]float64{
 		{DistanceToCameraPlane, 0.0, 0.0},
 		{0.0, DistanceToCameraPlane, 0.0},
@@ -121,6 +123,21 @@ func matrixVectorProduct3x3(A [3][3]float64, b [3]float64) [3]float64 {
 	return result
 }
 
+func matrixMatrixProduct4x3(A [][4]float64, B [4][3]float64) [][3]float64 {
+	m := len(A)
+	result := make([][3]float64, m)
+
+	for i := 0; i < m; i++ {
+		for j := 0; j < 3; j++ {
+			for k := 0; k < 4; k++ {
+				result[i][j] += A[i][k] * B[k][j]
+			}
+		}
+	}
+
+	return result
+}
+
 func getCameraRotationMatrix(alpha float64, beta float64, gamma float64) [3][3]float64 {
 	yawMatrix := getYawMatrix(alpha)
 	pitchMatrix := getPitchMatrix(beta)
@@ -131,7 +148,7 @@ func getCameraRotationMatrix(alpha float64, beta float64, gamma float64) [3][3]f
 
 func getExtrinsicMatrix(alpha float64, beta float64, gamma float64, cameraPosition [3]float64) [3][4]float64 {
 	R := getCameraRotationMatrix(alpha, beta, gamma)
-	t := matrixVectorProduct3x3(R, vector3dToArray(scaleByScalar(cameraPosition, -1.0)))
+	t := scaleByScalar(matrixVectorProduct3x3(R, cameraPosition), -1.0)
 
 	return [3][4]float64{
 		{R[0][0], R[0][1], R[0][2], t[0]},
@@ -168,11 +185,15 @@ type Cylinder struct {
 }
 
 type Camera struct {
-	Position [3]float64
-	Alpha    float64
-	Beta     float64
-	Gamma    float64
-	Matrix   [3][4]float64
+	Position         [3]float64
+	Alpha            float64
+	Beta             float64
+	Gamma            float64
+	ScreenWidth      int
+	ScreenHeight     int
+	ProjectionMatrix [3][4]float64
+	IntrinsicMatrix  [3][3]float64
+	ExtrinsicMatrix  [3][4]float64
 }
 
 func NewCamera(position [3]float64, alpha float64, beta float64, gamma float64) *Camera {
@@ -181,13 +202,13 @@ func NewCamera(position [3]float64, alpha float64, beta float64, gamma float64) 
 	camera.Alpha = alpha
 	camera.Beta = beta
 	camera.Gamma = gamma
-	camera.Matrix = getCameraMatrix(alpha, beta, gamma, position)
+	camera.ScreenWidth = ScreenWidth
+	camera.ScreenHeight = ScreenHeight
+	camera.ProjectionMatrix = getCameraMatrix(alpha, beta, gamma, position)
+	camera.IntrinsicMatrix = getIntrinsicMatrix()
+	camera.ExtrinsicMatrix = getExtrinsicMatrix(alpha, beta, gamma, position)
 
 	return camera
-}
-
-func vector3dToArray(v [3]float64) [3]float64 {
-	return [3]float64{v[0], v[1], v[2]}
 }
 
 func plus(a [3]float64, b [3]float64) [3]float64 {
@@ -216,61 +237,6 @@ func crossProduct(a [3]float64, b [3]float64) [3]float64 {
 
 func euclideanNorm(v [3]float64) float64 {
 	return math.Sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
-}
-
-func matrixVectorProduct(A [][]float64, b []float64) []float64 {
-	if len(A[0]) != len(b) {
-		panic("Matrix-vector product is ill-defined!")
-	}
-	m := len(A)
-	n := len(A[0])
-
-	result := make([]float64, m)
-
-	for i := 0; i < m; i++ {
-		for j := 0; j < n; j++ {
-			result[i] += A[i][j] * b[j]
-		}
-	}
-
-	return result
-}
-
-func matrixMatrixProduct(A [][]float64, B [][]float64) [][]float64 {
-	if len(A[0]) != len(B) {
-		panic("Matrix-matrix product is ill-defined!")
-	}
-	m := len(A)
-	n := len(B)
-	p := len(B[0])
-
-	result := make([][]float64, m)
-
-	for i := 0; i < m; i++ {
-		result[i] = make([]float64, p)
-		for j := 0; j < p; j++ {
-			for k := 0; k < n; k++ {
-				result[i][j] += A[i][k] * B[k][j]
-			}
-		}
-	}
-
-	return result
-}
-
-func matrixMatrixProduct4x3(A [][4]float64, B [4][3]float64) [][3]float64 {
-	m := len(A)
-	result := make([][3]float64, m)
-
-	for i := 0; i < m; i++ {
-		for j := 0; j < 3; j++ {
-			for k := 0; k < 4; k++ {
-				result[i][j] += A[i][k] * B[k][j]
-			}
-		}
-	}
-
-	return result
 }
 
 func printMatrix3x4(A [3][4]float64) {
@@ -320,11 +286,6 @@ func computeMeanCoordinate(cylinder *Cylinder) [3]float64 {
 	return meanCoord
 }
 
-func getCameraPrincipalPlane(camera *Camera) [4]float64 {
-	cameraMatrix := getCameraMatrix(camera.Alpha, camera.Beta, camera.Gamma, camera.Position)
-	return cameraMatrix[2]
-}
-
 func getCylinder(x0 float64, y0 float64) *Cylinder {
 	var cylinder *Cylinder
 	cylinder = new(Cylinder)
@@ -343,7 +304,7 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 
 			x := x0 + CylinderRadius*math.Cos(phi)
 			y := y0 + CylinderRadius*math.Sin(phi)
-			z := z
+			z := z - CylinderHeight/2.0
 
 			nx := math.Cos(phi)
 			ny := math.Sin(phi)
@@ -419,9 +380,9 @@ func gatherCoordinatesFromTriangleMesh(cylinder *Cylinder) [][3][4]float64 {
 	var faceMatrix [3][4]float64
 
 	for i, face := range cylinder.faces {
-		a1 := vector3dToArray(face.v1.coord)
-		a2 := vector3dToArray(face.v2.coord)
-		a3 := vector3dToArray(face.v3.coord)
+		a1 := face.v1.coord
+		a2 := face.v2.coord
+		a3 := face.v3.coord
 
 		copy(faceMatrix[0][:], append(a1[:], 1.0))
 		copy(faceMatrix[1][:], append(a2[:], 1.0))
@@ -439,9 +400,9 @@ func gatherNormalsFromTriangleMesh(cylinder *Cylinder) [][3][4]float64 {
 	var faceMatrix [3][4]float64
 
 	for i, face := range cylinder.faces {
-		a1 := vector3dToArray(face.v1.normal)
-		a2 := vector3dToArray(face.v2.normal)
-		a3 := vector3dToArray(face.v3.normal)
+		a1 := face.v1.normal
+		a2 := face.v2.normal
+		a3 := face.v3.normal
 
 		copy(faceMatrix[0][:], append(a1[:], 1.0))
 		copy(faceMatrix[1][:], append(a2[:], 1.0))
@@ -478,8 +439,8 @@ func normalsToLighting(normals [][3]float64) []float64 {
 	intensity := make([]float64, numNormals)
 	lightingDirection := getLightingDirection()
 	for i, normal := range normals {
-		// intensity[i] = 1.0 - math.Abs(normal[0]*lightingDirection[0] + normal[1]*lightingDirection[1] + normal[2]*lightingDirection[2])
-		intensity[i] = (1.0 + normal[0]*lightingDirection[0] + normal[1]*lightingDirection[1] + normal[2]*lightingDirection[2]) / 2.0
+		intensity[i] = 1.0 - math.Abs(normal[0]*lightingDirection[0]+normal[1]*lightingDirection[1]+normal[2]*lightingDirection[2])
+		//intensity[i] = (1.0 + normal[0]*lightingDirection[0] + normal[1]*lightingDirection[1] + normal[2]*lightingDirection[2]) / 2.0
 	}
 	return intensity
 }
@@ -511,7 +472,7 @@ func zBuffer(vertexImageCoords [][3]float64, vertexLightingIntensity []float64) 
 
 		z := vertexImageCoords[i][2]
 
-		if z < depth[x][y] {
+		if z >= 0 && z < depth[x][y] {
 			intensity := vertexLightingIntensity[i]
 			image[x][y] = intensity
 			fmt.Printf("%d %d %f %f\n", x, y, z, intensity)
@@ -607,10 +568,8 @@ func writeToObjFile(cylinder *Cylinder, camera *Camera, cylinderFileName string,
 }
 
 func main() {
-	cylinder := getCylinder(10.0, 10.0)
-	PI_2 := math.Pi / 2.0
-	PI_4 := math.Pi / 4.0
-	camera := NewCamera([3]float64{0, 0, 0}, 0.0, -PI_4, PI_2)
+	cylinder := getCylinder(2.0, 2.0)
+	camera := NewCamera([3]float64{0, 0, 0}, 0.0, -Pi4, Pi2)
 	writeToObjFile(cylinder, camera, "cylinder.obj", "camera.json")
 	rasterizeLevelToImage(camera, cylinder, "cylinder.png")
 }
