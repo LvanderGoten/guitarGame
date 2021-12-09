@@ -18,10 +18,10 @@ const (
 	MaxOctave                  int     = 6
 	CylinderRadius             float64 = 1.0
 	CylinderHeight             float64 = 5.0
-	CylinderNumRotationAngles  int     = 500
-	CylinderNumHeightDivisions int     = 500
-	ScreenWidth                int     = 1024
-	ScreenHeight               int     = 1024
+	CylinderNumRotationAngles  int     = 150
+	CylinderNumHeightDivisions int     = 150
+	ScreenWidth                int     = 256
+	ScreenHeight               int     = 456
 	DistanceToCameraPlane      float64 = 5.0
 	PixelSize                  float64 = 200
 	Pi2                        float64 = math.Pi / 2.0
@@ -44,26 +44,7 @@ func getCanonicalNotes() [12]string {
 }
 
 func getLightingDirection() [3]float64 {
-	return [3]float64{1.0 / math.Sqrt(2.0), 1.0 / math.Sqrt(2.0), 0.0}
-}
-
-type Vertex struct {
-	id     int
-	coord  [3]float64
-	normal [3]float64
-}
-
-type Face struct {
-	v1 *Vertex
-	v2 *Vertex
-	v3 *Vertex
-
-	n [3]float64
-}
-
-type Cylinder struct {
-	vertices []Vertex
-	faces    []Face
+	return [3]float64{1.0 / math.Sqrt(2.0), 0.0, 1.0 / math.Sqrt(2.0)}
 }
 
 func gatherCoordinatesFromTriangleMesh(cylinder *Cylinder) [][3][4]float64 {
@@ -139,7 +120,7 @@ func normalsToLighting(normals [][3]float64) []float64 {
 	intensity := make([]float64, numNormals)
 	lightingDirection := getLightingDirection()
 	for i, normal := range normals {
-		intensity[i] = 1.0 - math.Abs(normal[0]*lightingDirection[0]+normal[1]*lightingDirection[1]+normal[2]*lightingDirection[2])
+		intensity[i] = (1.0 + normal[0]*lightingDirection[0]+normal[1]*lightingDirection[1]+normal[2]*lightingDirection[2])/2.0
 	}
 	return intensity
 }
@@ -157,8 +138,7 @@ func zBuffer(vertexImageCoords [][3]float64, vertexLightingIntensity []float64) 
 	var depth [ScreenWidth][ScreenHeight]float64
 	for i := 0; i < ScreenWidth; i++ {
 		for j := 0; j < ScreenHeight; j++ {
-			//depth[i][j] = math.Inf(1)
-			depth[i][j] = 0
+			depth[i][j] = math.Inf(1)
 		}
 	}
 
@@ -170,16 +150,13 @@ func zBuffer(vertexImageCoords [][3]float64, vertexLightingIntensity []float64) 
 			continue
 		}
 
-		//z := vertexImageCoords[i][2]
+		z := vertexImageCoords[i][2]
 
-		//if z >= 0 && z < depth[x][y] {
-		intensity := vertexLightingIntensity[i]
-		//image[x][y] = intensity
-		//fmt.Printf("%d %d %f %f\n", x, y, z, intensity)
-		image[x][y] = (depth[x][y]*image[x][y] + intensity) / (depth[x][y] + 1)
-		//depth[x][y] = z
-		depth[x][y]++
-		//}
+		if z >= 0 && z < depth[x][y] {
+			intensity := vertexLightingIntensity[i]
+			image[x][y] = intensity
+			depth[x][y] = z
+		}
 
 	}
 	return image
@@ -244,22 +221,25 @@ func rasterizeLevelToImage(camera *Camera, cylinder *Cylinder, fileName string) 
 	fmt.Println(len(image8bit))
 }
 
-func writeToObjFile(cylinder *Cylinder, camera *Camera, cylinderFileName string, cameraFileName string) {
-	f, err := os.Create(cylinderFileName)
+func writeToObjFile(cylinder *Cylinder, camera *Camera, cylinderFileName string, cylinderSurfaceNormalsFname string, cameraFileName string) {
+	fObj, err := os.Create(cylinderFileName)
+	fCsv, err := os.Create(cylinderSurfaceNormalsFname)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	for _, vertex := range cylinder.vertices {
-		_, err := f.WriteString(fmt.Sprintf("v %.3f %.3f %.3f\n", vertex.coord[0], vertex.coord[1], vertex.coord[2]))
+		_, err := fObj.WriteString(fmt.Sprintf("v %.10f %.10f %.10f\n", vertex.coord[0], vertex.coord[1], vertex.coord[2]))
 		if err != nil {
 			return
 		}
 	}
 
+	fCsv.WriteString(fmt.Sprintf("fx,fy,fz\n"))
 	for _, face := range cylinder.faces {
-		_, err := f.WriteString(fmt.Sprintf("f %d %d %d\n", face.v1.id+1, face.v2.id+1, face.v3.id+1))
+		_, err := fObj.WriteString(fmt.Sprintf("f %d %d %d\n", face.v1.id+1, face.v2.id+1, face.v3.id+1))
+		_, err = fCsv.WriteString(fmt.Sprintf("%f,%f,%f\n", face.n[0], face.n[1], face.n[2]))
 		if err != nil {
 			return
 		}
@@ -272,6 +252,6 @@ func writeToObjFile(cylinder *Cylinder, camera *Camera, cylinderFileName string,
 func main() {
 	cylinder := getCylinder(10.0, 10.0)
 	camera := NewCamera([3]float64{0, 0, 2.5}, Pi4, -Pi4, Pi2)
-	writeToObjFile(cylinder, camera, "cylinder.obj", "camera.json")
+	writeToObjFile(cylinder, camera, "cylinder.obj", "cylinderSurfaceNormals.csv", "camera.json")
 	rasterizeLevelToImage(camera, cylinder, "cylinder.png")
 }

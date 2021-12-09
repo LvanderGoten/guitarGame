@@ -1,15 +1,37 @@
 package main
 
-import "math"
+import (
+	"math"
+)
+
+type Vertex struct {
+	id     int
+	coord  [3]float64
+	normal [3]float64
+}
+
+type Face struct {
+	v1 *Vertex
+	v2 *Vertex
+	v3 *Vertex
+
+	n [3]float64
+}
+
+type Cylinder struct {
+	vertices []Vertex
+	faces    []Face
+}
+
 
 func getCylinder(x0 float64, y0 float64) *Cylinder {
 	var cylinder *Cylinder
 	cylinder = new(Cylinder)
 
 	zInc := CylinderHeight / float64(CylinderNumHeightDivisions-1)
-	phiInc := (2.0 * math.Pi) / float64(CylinderNumRotationAngles-1)
+	phiInc := (2.0 * math.Pi) / float64(CylinderNumRotationAngles)
 
-	cylinder.vertices = make([]Vertex, CylinderNumHeightDivisions*CylinderNumRotationAngles+2)
+	cylinder.vertices = make([]Vertex, CylinderNumHeightDivisions*CylinderNumRotationAngles + 2)
 
 	// Vertices
 	for i := 0; i < CylinderNumHeightDivisions; i++ {
@@ -53,7 +75,7 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 	}
 
 	// Faces bottom (triangulation)
-	vcbi := (CylinderNumHeightDivisions-1)*CylinderNumRotationAngles + CylinderNumRotationAngles
+	vcbi := CylinderNumHeightDivisions * CylinderNumRotationAngles
 	vcb := Vertex{id: vcbi, coord: [3]float64{x0, y0, 0}}
 	cylinder.vertices[vcbi] = vcb
 	for j := 0; j < CylinderNumRotationAngles; j++ {
@@ -62,7 +84,7 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 
 		v1 := &cylinder.vertices[v1i]
 		v2 := &cylinder.vertices[v2i]
-		v3 := &vcb
+		v3 := &cylinder.vertices[vcbi]
 
 		n := computeNormal(v1, v2, v3)
 		face := Face{v1, v2, v3, n}
@@ -70,7 +92,7 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 	}
 
 	// Faces top (triangulation)
-	vcti := (CylinderNumHeightDivisions-1)*CylinderNumRotationAngles + CylinderNumRotationAngles + 1
+	vcti := CylinderNumHeightDivisions * CylinderNumRotationAngles + 1
 	vct := Vertex{id: vcti, coord: [3]float64{x0, y0, CylinderHeight}}
 	cylinder.vertices[vcti] = vct
 	for j := 0; j < CylinderNumRotationAngles; j++ {
@@ -79,7 +101,7 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 
 		v1 := &cylinder.vertices[v1i]
 		v2 := &cylinder.vertices[v2i]
-		v3 := &vct
+		v3 := &cylinder.vertices[vcti]
 
 		n := computeNormal(v1, v2, v3)
 		face := Face{v1, v2, v3, n}
