@@ -19,11 +19,11 @@ const (
 	CylinderRadius             float64 = 1.0
 	CylinderHeight             float64 = 5.0
 	CylinderNumRotationAngles  int     = 500
-	CylinderNumHeightDivisions int     = 250
-	ScreenWidth                int     = 64
-	ScreenHeight               int     = 64
-	DistanceToCameraPlane      float64 = 1.0
-	PixelSize                  float64 = 50
+	CylinderNumHeightDivisions int     = 500
+	ScreenWidth                int     = 1024
+	ScreenHeight               int     = 1024
+	DistanceToCameraPlane      float64 = 5.0
+	PixelSize                  float64 = 200
 	Pi2                        float64 = math.Pi / 2.0
 	Pi4                        float64 = math.Pi / 4.0
 )
@@ -122,11 +122,13 @@ func flattenVector3d(arr [][3][4]float64) [][4]float64 {
 func worldCoordinatesToImageCoordinates(vertexWorldCoords [][4]float64, cameraMatrix [3][4]float64) [][3]float64 {
 	cameraMatrixTransposed := transposeMatrix3x4(cameraMatrix)
 	vertexImageCoords := matrixMatrixProduct4x3(vertexWorldCoords, cameraMatrixTransposed)
+	m := [3]float64{cameraMatrix[2][0], cameraMatrix[2][1], cameraMatrix[2][2]}
+	mNorm := euclideanNorm(m)
 
 	for i := 0; i < len(vertexImageCoords); i++ {
 		vertexImageCoords[i][0] /= vertexImageCoords[i][2]
 		vertexImageCoords[i][1] /= vertexImageCoords[i][2]
-		vertexImageCoords[i][2] = 1.0
+		vertexImageCoords[i][2] /= mNorm
 	}
 
 	return vertexImageCoords
@@ -138,7 +140,6 @@ func normalsToLighting(normals [][3]float64) []float64 {
 	lightingDirection := getLightingDirection()
 	for i, normal := range normals {
 		intensity[i] = 1.0 - math.Abs(normal[0]*lightingDirection[0]+normal[1]*lightingDirection[1]+normal[2]*lightingDirection[2])
-		//intensity[i] = (1.0 + normal[0]*lightingDirection[0] + normal[1]*lightingDirection[1] + normal[2]*lightingDirection[2]) / 2.0
 	}
 	return intensity
 }
@@ -156,7 +157,8 @@ func zBuffer(vertexImageCoords [][3]float64, vertexLightingIntensity []float64) 
 	var depth [ScreenWidth][ScreenHeight]float64
 	for i := 0; i < ScreenWidth; i++ {
 		for j := 0; j < ScreenHeight; j++ {
-			depth[i][j] = math.Inf(1)
+			//depth[i][j] = math.Inf(1)
+			depth[i][j] = 0
 		}
 	}
 
@@ -168,14 +170,16 @@ func zBuffer(vertexImageCoords [][3]float64, vertexLightingIntensity []float64) 
 			continue
 		}
 
-		z := vertexImageCoords[i][2]
+		//z := vertexImageCoords[i][2]
 
-		if z >= 0 && z < depth[x][y] {
-			intensity := vertexLightingIntensity[i]
-			image[x][y] = intensity
-			fmt.Printf("%d %d %f %f\n", x, y, z, intensity)
-			depth[x][y] = z
-		}
+		//if z >= 0 && z < depth[x][y] {
+		intensity := vertexLightingIntensity[i]
+		//image[x][y] = intensity
+		//fmt.Printf("%d %d %f %f\n", x, y, z, intensity)
+		image[x][y] = (depth[x][y]*image[x][y] + intensity) / (depth[x][y] + 1)
+		//depth[x][y] = z
+		depth[x][y]++
+		//}
 
 	}
 	return image
@@ -267,7 +271,7 @@ func writeToObjFile(cylinder *Cylinder, camera *Camera, cylinderFileName string,
 
 func main() {
 	cylinder := getCylinder(10.0, 10.0)
-	camera := NewCamera([3]float64{0, 0, 0}, 0.0, -Pi4, Pi2)
+	camera := NewCamera([3]float64{0, 0, 2.5}, Pi4, -Pi4, Pi2)
 	writeToObjFile(cylinder, camera, "cylinder.obj", "camera.json")
 	rasterizeLevelToImage(camera, cylinder, "cylinder.png")
 }

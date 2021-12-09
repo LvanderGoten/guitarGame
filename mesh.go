@@ -13,7 +13,7 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 
 	// Vertices
 	for i := 0; i < CylinderNumHeightDivisions; i++ {
-		z := float64(i)*zInc - CylinderHeight/2.0
+		z := float64(i) * zInc
 
 		for j := 0; j < CylinderNumRotationAngles; j++ {
 			phi := float64(j) * phiInc

@@ -35,16 +35,6 @@ func getIntrinsicMatrix() [3][3]float64 {
 		{0.0, DistanceToCameraPlane * PixelSize, float64(ScreenHeight) / 2.0},
 		{0.0, 0.0, 1.0},
 	}
-	//return [3][3]float64{
-	//	{DistanceToCameraPlane * PixelSize, 0.0, float64(ScreenWidth)},
-	//	{0.0, DistanceToCameraPlane * PixelSize, float64(ScreenHeight)},
-	//	{0.0, 0.0, 1.0},
-	//}
-	//return [3][3]float64{
-	//	{DistanceToCameraPlan * PixelSize, 0.0, 0.0},
-	//	{0.0, DistanceToCameraPlane * PixelSize, 0.0},
-	//	{0.0, 0.0, 1.0},
-	//}
 }
 
 func getYawMatrix(alpha float64) [3][3]float64 {
