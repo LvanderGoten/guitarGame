@@ -23,7 +23,6 @@ type Cylinder struct {
 	faces    []Face
 }
 
-
 func getCylinder(x0 float64, y0 float64) *Cylinder {
 	var cylinder *Cylinder
 	cylinder = new(Cylinder)
@@ -31,7 +30,7 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 	zInc := CylinderHeight / float64(CylinderNumHeightDivisions-1)
 	phiInc := (2.0 * math.Pi) / float64(CylinderNumRotationAngles)
 
-	cylinder.vertices = make([]Vertex, CylinderNumHeightDivisions*CylinderNumRotationAngles + 2)
+	cylinder.vertices = make([]Vertex, CylinderNumHeightDivisions*CylinderNumRotationAngles+2)
 
 	// Vertices
 	for i := 0; i < CylinderNumHeightDivisions; i++ {
@@ -80,11 +79,11 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 	cylinder.vertices[vcbi] = vcb
 	for j := 0; j < CylinderNumRotationAngles; j++ {
 		v1i := j
-		v2i := (v1i + 1) % CylinderNumRotationAngles
+		v3i := (v1i + 1) % CylinderNumRotationAngles
 
 		v1 := &cylinder.vertices[v1i]
-		v2 := &cylinder.vertices[v2i]
-		v3 := &cylinder.vertices[vcbi]
+		v2 := &cylinder.vertices[vcbi]
+		v3 := &cylinder.vertices[v3i]
 
 		n := computeNormal(v1, v2, v3)
 		face := Face{v1, v2, v3, n}
@@ -92,7 +91,7 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 	}
 
 	// Faces top (triangulation)
-	vcti := CylinderNumHeightDivisions * CylinderNumRotationAngles + 1
+	vcti := CylinderNumHeightDivisions*CylinderNumRotationAngles + 1
 	vct := Vertex{id: vcti, coord: [3]float64{x0, y0, CylinderHeight}}
 	cylinder.vertices[vcti] = vct
 	for j := 0; j < CylinderNumRotationAngles; j++ {

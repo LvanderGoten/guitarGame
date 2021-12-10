@@ -18,12 +18,12 @@ const (
 	MaxOctave                  int     = 6
 	CylinderRadius             float64 = 1.0
 	CylinderHeight             float64 = 5.0
-	CylinderNumRotationAngles  int     = 150
-	CylinderNumHeightDivisions int     = 150
+	CylinderNumRotationAngles  int     = 15
+	CylinderNumHeightDivisions int     = 15
 	ScreenWidth                int     = 256
-	ScreenHeight               int     = 456
+	ScreenHeight               int     = 256
 	DistanceToCameraPlane      float64 = 5.0
-	PixelSize                  float64 = 200
+	PixelSize                  float64 = 100
 	Pi2                        float64 = math.Pi / 2.0
 	Pi4                        float64 = math.Pi / 4.0
 )
@@ -120,7 +120,7 @@ func normalsToLighting(normals [][3]float64) []float64 {
 	intensity := make([]float64, numNormals)
 	lightingDirection := getLightingDirection()
 	for i, normal := range normals {
-		intensity[i] = (1.0 + normal[0]*lightingDirection[0]+normal[1]*lightingDirection[1]+normal[2]*lightingDirection[2])/2.0
+		intensity[i] = (1.0 + normal[0]*lightingDirection[0] + normal[1]*lightingDirection[1] + normal[2]*lightingDirection[2]) / 2.0
 	}
 	return intensity
 }
@@ -251,7 +251,7 @@ func writeToObjFile(cylinder *Cylinder, camera *Camera, cylinderFileName string,
 
 func main() {
 	cylinder := getCylinder(10.0, 10.0)
-	camera := NewCamera([3]float64{0, 0, 2.5}, Pi4, -Pi4, Pi2)
+	camera := NewCamera([3]float64{0, 0, 2.5}, 0.0, -Pi4, Pi2)
 	writeToObjFile(cylinder, camera, "cylinder.obj", "cylinderSurfaceNormals.csv", "camera.json")
 	rasterizeLevelToImage(camera, cylinder, "cylinder.png")
 }
