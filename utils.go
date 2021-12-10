@@ -103,6 +103,32 @@ func transposeMatrix3x3(A [3][3]float64) [3][3]float64 {
 	return result
 }
 
+func subset3x4Matrix(A [3][4]float64) [3][3]float64 {
+	var result [3][3]float64
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			result[i][j] = A[i][j]
+		}
+	}
+	return result
+}
+
+func subsetVector3x4(A [3][4]float64, j int) [3]float64 {
+	var result [3]float64
+	for i := 0; i < 3; i++ {
+		result[i] = A[i][j]
+	}
+	return result
+}
+
+func invertUpperTriangularMatrix3x3(A [3][3]float64) [3][3]float64 {
+	return [3][3]float64{
+		{1 / A[0][0], -1 / A[0][0], 0},
+		{0, 1 / A[1][1], -A[1][2] / (A[1][1] * A[2][2])},
+		{0, 0, 1 / A[2][2]},
+	}
+}
+
 func transposeMatrix3x4(A [3][4]float64) [4][3]float64 {
 	var result [4][3]float64
 	for i := 0; i < 4; i++ {

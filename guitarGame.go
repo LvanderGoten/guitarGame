@@ -20,8 +20,8 @@ const (
 	CylinderHeight             float64 = 5.0
 	CylinderNumRotationAngles  int     = 15
 	CylinderNumHeightDivisions int     = 15
-	ScreenWidth                int     = 256
-	ScreenHeight               int     = 256
+	ScreenWidth                int     = 128
+	ScreenHeight               int     = 128
 	DistanceToCameraPlane      float64 = 5.0
 	PixelSize                  float64 = 100
 	Pi2                        float64 = math.Pi / 2.0
@@ -201,6 +201,38 @@ func homogeneousToInhomogeneous(vertexCoords [][4]float64) [][3]float64 {
 	return result
 }
 
+func computeRay(imgCoord [2]int, camera *Camera) [2][3]float64 {
+	M := camera.M
+	fmt.Println(len(M))
+	var result [2][3]float64
+	return result
+}
+
+func raytraceLevelToImage(camera *Camera, cylinder *Cylinder, fileName string) {
+	//projectionMatrix := camera.ProjectionMatrix
+	//faces := cylinder.faces
+
+	// TODO: Check order
+	var imgCoords [ScreenWidth * ScreenHeight][2]int
+	for i := 0; i < ScreenWidth; i++ {
+		for j := 0; j < ScreenHeight; j++ {
+			k := i*ScreenHeight + j
+			imgCoords[k][0] = i
+			imgCoords[k][1] = j
+		}
+	}
+
+	var rays [ScreenWidth * ScreenHeight][2][3]float64
+	for i := 0; i < ScreenWidth; i++ {
+		for j := 0; j < ScreenHeight; j++ {
+			k := i*ScreenHeight + j
+
+			rays[k] = computeRay(imgCoords[k], camera)
+		}
+	}
+	fmt.Println()
+}
+
 func rasterizeLevelToImage(camera *Camera, cylinder *Cylinder, fileName string) {
 	cameraMatrix := getCameraMatrix(camera.Alpha, camera.Beta, camera.Gamma, camera.Position)
 
@@ -253,5 +285,5 @@ func main() {
 	cylinder := getCylinder(10.0, 10.0)
 	camera := NewCamera([3]float64{0, 0, 2.5}, 0.0, -Pi4, Pi2)
 	writeToObjFile(cylinder, camera, "cylinder.obj", "cylinderSurfaceNormals.csv", "camera.json")
-	rasterizeLevelToImage(camera, cylinder, "cylinder.png")
+	raytraceLevelToImage(camera, cylinder, "cylinder.png")
 }
