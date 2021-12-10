@@ -202,9 +202,10 @@ func homogeneousToInhomogeneous(vertexCoords [][4]float64) [][3]float64 {
 }
 
 func computeRay(imgCoord [2]int, camera *Camera) [2][3]float64 {
-	M := camera.M
-	fmt.Println(len(M))
 	var result [2][3]float64
+	x := [3]float64{float64(imgCoord[0]), float64(imgCoord[1]), 1}
+	result[0] = camera.Position
+	result[1] = matrixVectorProduct3x3(camera.Minv, x)
 	return result
 }
 

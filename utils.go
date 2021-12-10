@@ -123,7 +123,7 @@ func subsetVector3x4(A [3][4]float64, j int) [3]float64 {
 
 func invertUpperTriangularMatrix3x3(A [3][3]float64) [3][3]float64 {
 	return [3][3]float64{
-		{1 / A[0][0], -1 / A[0][0], 0},
+		{1 / A[0][0], -A[0][1] / (A[0][0] * A[1][1]), (A[0][1]*A[1][2] - A[0][2]*A[1][1]) / (A[0][0] * A[1][1] * A[2][2])},
 		{0, 1 / A[1][1], -A[1][2] / (A[1][1] * A[2][2])},
 		{0, 0, 1 / A[2][2]},
 	}

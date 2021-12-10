@@ -3,18 +3,20 @@ package main
 import "math"
 
 type Camera struct {
-	Position         [3]float64
-	Alpha            float64
-	Beta             float64
-	Gamma            float64
-	ScreenWidth      int
-	ScreenHeight     int
-	ProjectionMatrix [3][4]float64
-	M                [3][3]float64
-	Minv             [3][3]float64
-	P4               [3]float64
-	IntrinsicMatrix  [3][3]float64
-	ExtrinsicMatrix  [3][4]float64
+	Position           [3]float64
+	Alpha              float64
+	Beta               float64
+	Gamma              float64
+	ScreenWidth        int
+	ScreenHeight       int
+	ProjectionMatrix   [3][4]float64
+	M                  [3][3]float64
+	Minv               [3][3]float64
+	P4                 [3]float64
+	IntrinsicMatrix    [3][3]float64
+	IntrinsicMatrixInv [3][3]float64
+	ExtrinsicMatrix    [3][4]float64
+	R                  [3][3]float64
 }
 
 func NewCamera(position [3]float64, alpha float64, beta float64, gamma float64) *Camera {
@@ -27,10 +29,12 @@ func NewCamera(position [3]float64, alpha float64, beta float64, gamma float64) 
 	camera.ScreenHeight = ScreenHeight
 	camera.ProjectionMatrix = getCameraMatrix(alpha, beta, gamma, position)
 	camera.M = subset3x4Matrix(camera.ProjectionMatrix)
-	camera.Minv = invertUpperTriangularMatrix3x3(camera.M)
 	camera.P4 = subsetVector3x4(camera.ProjectionMatrix, 3)
 	camera.IntrinsicMatrix = getIntrinsicMatrix()
+	camera.IntrinsicMatrixInv = invertUpperTriangularMatrix3x3(camera.IntrinsicMatrix)
 	camera.ExtrinsicMatrix = getExtrinsicMatrix(alpha, beta, gamma, position)
+	camera.R = subset3x4Matrix(camera.ExtrinsicMatrix)
+	camera.Minv = matrixMatrixProduct3x3(transposeMatrix3x3(camera.R), camera.IntrinsicMatrixInv)
 
 	return camera
 }
