@@ -66,9 +66,9 @@ func getCylinder(x0 float64, y0 float64) *Cylinder {
 			v4 := &cylinder.vertices[v4i]
 
 			nAlpha := computeNormal(v1, v2, v3)
-			nBeta := computeNormal(v2, v3, v4)
+			nBeta := computeNormal(v2, v4, v3)
 			faceAlpha := Face{v1, v2, v3, nAlpha}
-			faceBeta := Face{v2, v3, v4, nBeta}
+			faceBeta := Face{v2, v4, v3, nBeta}
 			cylinder.faces = append(cylinder.faces, faceAlpha, faceBeta)
 		}
 	}

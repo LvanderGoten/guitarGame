@@ -83,6 +83,10 @@ func euclideanNorm(v [3]float64) float64 {
 	return math.Sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
 }
 
+func normalize(v [3]float64) [3]float64 {
+	return scaleByScalar(v, euclideanNorm(v))
+}
+
 func printMatrix3x4(A [3][4]float64) {
 	for _, row := range A {
 		fmt.Print("[")

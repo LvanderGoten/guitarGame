@@ -18,15 +18,21 @@ const (
 	MaxOctave                  int     = 6
 	CylinderRadius             float64 = 1.0
 	CylinderHeight             float64 = 5.0
-	CylinderNumRotationAngles  int     = 15
-	CylinderNumHeightDivisions int     = 15
-	ScreenWidth                int     = 128
-	ScreenHeight               int     = 128
+	CylinderNumRotationAngles  int     = 100
+	CylinderNumHeightDivisions int     = 100
+	ScreenWidth                int     = 256
+	ScreenHeight               int     = 256
 	DistanceToCameraPlane      float64 = 5.0
 	PixelSize                  float64 = 100
 	Pi2                        float64 = math.Pi / 2.0
 	Pi4                        float64 = math.Pi / 4.0
+	Eps float64 = 1e-6
 )
+
+type LinearEquation struct {
+	origin [3]float64
+	direction [3]float64
+}
 
 func getOpenStringNotes() [6]string {
 	return [6]string{"E", "B", "G", "D", "A", "E"}
@@ -201,11 +207,54 @@ func homogeneousToInhomogeneous(vertexCoords [][4]float64) [][3]float64 {
 	return result
 }
 
-func computeRay(imgCoord [2]int, camera *Camera) [2][3]float64 {
-	var result [2][3]float64
+func computeRay(imgCoord [2]int, camera *Camera) LinearEquation {
 	x := [3]float64{float64(imgCoord[0]), float64(imgCoord[1]), 1}
-	result[0] = camera.Position
-	result[1] = matrixVectorProduct3x3(camera.Minv, x)
+	direction :=  matrixVectorProduct3x3(camera.Minv, x)
+	return LinearEquation{camera.Position, direction}
+}
+
+func mollerTrumbore(ray LinearEquation, face Face) bool {
+	p1 := face.v1.coord
+	p2 := face.v2.coord
+	p3 := face.v3.coord
+
+	e1 := minus(p2, p1)
+	e2 := minus(p3, p1)
+
+	h := crossProduct(ray.direction, e2)
+	a := dotProduct(e1, h)
+	if math.Abs(a) < Eps {
+		return false
+	}
+
+	f := 1.0/a
+	s := minus(ray.origin, p1)
+	u := f * dotProduct(s, h)
+	if u < 0.0 || u > 1.0 {
+		return false
+	}
+	q := crossProduct(s, e1)
+	v := f * dotProduct(ray.direction, q)
+	if v < 0.0 || u + v > 1.0 {
+		return false
+	}
+	t := f * dotProduct(e2, q)
+	if t > Eps {
+		//p := plus(ray.origin, scaleByScalar(ray.direction, t))
+		return true
+	}
+	return false
+
+}
+
+func rayTriangleCollisions(ray LinearEquation, cylinder *Cylinder) []Face {
+
+	var result []Face
+	for _, face := range cylinder.faces {
+		if mollerTrumbore(ray, face) {
+			result = append(result, face)
+		}
+	}
 	return result
 }
 
@@ -223,15 +272,28 @@ func raytraceLevelToImage(camera *Camera, cylinder *Cylinder, fileName string) {
 		}
 	}
 
-	var rays [ScreenWidth * ScreenHeight][2][3]float64
+	var rays [ScreenWidth * ScreenHeight]LinearEquation
+	var collisions [ScreenWidth * ScreenHeight][]Face
+	var image [ScreenWidth][ScreenHeight]float64
 	for i := 0; i < ScreenWidth; i++ {
 		for j := 0; j < ScreenHeight; j++ {
 			k := i*ScreenHeight + j
 
 			rays[k] = computeRay(imgCoords[k], camera)
+			collisions[k] = rayTriangleCollisions(rays[k], cylinder)
+
+			if len(collisions[k]) > 0 {
+				for l, face := range collisions[k] {
+					l := float64(l)
+					light := (1.0 + dotProduct(face.n, getLightingDirection()))/2.0
+					image[i][j] = (l * image[i][j] + light)/(l + 1)
+				}
+			}
 		}
 	}
-	fmt.Println()
+
+	image8bit := imageTo8bit(image)
+	save8bitImage(image8bit, fileName)
 }
 
 func rasterizeLevelToImage(camera *Camera, cylinder *Cylinder, fileName string) {
@@ -250,8 +312,6 @@ func rasterizeLevelToImage(camera *Camera, cylinder *Cylinder, fileName string) 
 	image := zBuffer(vertexImageCoords, vertexLightingIntensity)
 	image8bit := imageTo8bit(image)
 	save8bitImage(image8bit, fileName)
-
-	fmt.Println(len(image8bit))
 }
 
 func writeToObjFile(cylinder *Cylinder, camera *Camera, cylinderFileName string, cylinderSurfaceNormalsFname string, cameraFileName string) {
@@ -284,7 +344,8 @@ func writeToObjFile(cylinder *Cylinder, camera *Camera, cylinderFileName string,
 
 func main() {
 	cylinder := getCylinder(10.0, 10.0)
-	camera := NewCamera([3]float64{0, 0, 2.5}, 0.0, -Pi4, Pi2)
+	camera := NewCamera([3]float64{0, 0, 2.5}, Pi4, -Pi4, Pi2)
 	writeToObjFile(cylinder, camera, "cylinder.obj", "cylinderSurfaceNormals.csv", "camera.json")
-	raytraceLevelToImage(camera, cylinder, "cylinder.png")
+	rasterizeLevelToImage(camera, cylinder, "cylinder.png")
+	//raytraceLevelToImage(camera, cylinder, "cylinder.png")
 }
